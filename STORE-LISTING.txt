@@ -17,8 +17,8 @@ SETUP
 Icons from game-icons.net, CC BY 3.0.
 
 CHANGELOG
-What's new in 1.3.0
-- Cloud voice: use your own OpenAI or OpenRouter key for speech-to-text. With a cloud key for voice and the Dungeon Master, Delve needs no PC at all.
-- Main menu: pause any time with a double-tap, then continue, start a new run (it asks first), view the Hall of Fame or exit. Your run is saved.
-- New option pills: swipe to highlight, tap to pick. Each pill shows a short hint, and Speak is always first.
-- Level meter while listening, plus fixes.
+What's new in 1.4
+- Options now fit on real glasses: up to three pills at a time, with a More pill to page through the rest. No more cut-off choices.
+- Hero cards are back: each hero's portrait, background, HP, armor, weapon and ability scores. Tap Next to flip through, or just say the class name.
+- New pixel-art portraits for heroes, monsters and companions. Switch back to smooth in Settings.
+- Fixed quotes and dice-check text on the lens.

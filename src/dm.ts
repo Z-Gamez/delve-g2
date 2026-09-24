@@ -324,12 +324,16 @@ export class DungeonMaster {
 
 /** Strips what a small model likes to add: quotes, markdown, stage directions. */
 function tidy(text: string): string {
-  return text
+  let t = text
     .replace(/<think>[\s\S]*?<\/think>/g, '')
     .replace(/[*_#`]/g, '')
-    .replace(/^["'“]+|["'”]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim()
+  // Strip quotes only when they wrap the whole reply. Stripping a trailing
+  // quote on its own ate the closing quote of dialogue: 'Gold only. -> 'Gold only.
+  const wrapped = /^["'“](.*)["'”]$/.exec(t)
+  if (wrapped && !/["“”]/.test(wrapped[1])) t = wrapped[1].trim()
+  return t
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
