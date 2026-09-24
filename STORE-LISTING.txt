@@ -2,7 +2,7 @@ DESCRIPTION
 Endless D&D roguelike you play by voice, AI-run DM
 
 ABOUT AND SETUP
-Delve is an endless D&D-style roguelike you play with your voice. Tap the glasses and say what your hero does: "cast fireball", "attack the second goblin", "drink a potion", "go left". Say anything else, like "kick the brazier onto the orc", and the AI Dungeon Master picks the ability check, the dice decide, and the outcome is narrated on your lens.
+Delve is an endless D&D-style roguelike you play with your voice. Tap Speak on the glasses and say what your hero does: "cast fireball", "attack the second goblin", "drink a potion", "go left". Say anything else, like "kick the brazier onto the orc", and the AI Dungeon Master picks the ability check, the dice decide, and the outcome is narrated on your lens.
 
 Pick one of six classes: Fighter, Rogue, Wizard, Cleric, Ranger or Barbarian. Every step offers a choice of doors: fights, elite monsters, treasure chests (some of them bite), shrines, merchants, campfires, traps and mystery encounters the AI invents on the spot. Battle 40 monsters and a boss every third floor. Find magic weapons, potions, scrolls and rings, choose a power-up at every level, and recruit companions like a wolf, a dwarf or a fairy healer. Death is permanent, the dungeon never ends, and fallen heroes join the Hall of Fame. Your run saves after every turn.
 
@@ -15,3 +15,10 @@ SETUP
 4. Tap Speak and talk. Press and hold for the glasses menu: character sheet, inventory, hands-free mode, how to play and the Hall of Fame.
 
 Icons from game-icons.net, CC BY 3.0.
+
+CHANGELOG
+What's new in 1.3.0
+- Cloud voice: use your own OpenAI or OpenRouter key for speech-to-text. With a cloud key for voice and the Dungeon Master, Delve needs no PC at all.
+- Main menu: pause any time with a double-tap, then continue, start a new run (it asks first), view the Hall of Fame or exit. Your run is saved.
+- New option pills: swipe to highlight, tap to pick. Each pill shows a short hint, and Speak is always first.
+- Level meter while listening, plus fixes.
