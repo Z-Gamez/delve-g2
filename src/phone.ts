@@ -5,7 +5,7 @@
 import type { App } from './app'
 import { hallText } from './app'
 import type { LensFrame } from './glasses'
-import { iconSvg } from './art'
+import { iconSvg, portrait } from './art'
 import { ICON_AUTHORS, type IconName } from './icons.gen'
 import { CONSUMABLES } from './engine/data'
 import { itemName, itemDesc } from './engine/items'
@@ -108,11 +108,20 @@ export function mountPhone(root: HTMLElement, app: App) {
     lens.querySelector('.l-cap')!.textContent = f.caption
     lens.querySelector('.l-ftr')!.textContent = f.footer
     const art = lens.querySelector<HTMLElement>('.l-art')!
-    const key = `${f.icon}|${f.dim}`
+    const pixel = app.settings.pixelArt
+    const key = `${f.icon}|${f.dim}|${pixel}`
     if (key !== lastIcon) {
       lastIcon = key
-      art.innerHTML = iconSvg(f.icon)
-      art.classList.toggle('dim', f.dim)
+      art.classList.toggle('dim', f.dim && !pixel)
+      if (!pixel) art.innerHTML = iconSvg(f.icon)
+      else {
+        // The exact bytes the lens gets, tinted green and scaled with hard edges.
+        void portrait(f.icon, { size: 136, dim: f.dim, pixel: true }).then(bytes => {
+          if (lastIcon !== key) return
+          const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'image/png' }))
+          art.innerHTML = `<img class="px" src="${url}" alt="" />`
+        })
+      }
     }
   }
 
@@ -215,6 +224,7 @@ export function mountPhone(root: HTMLElement, app: App) {
         <p class="hint" id="serverHint"></p>
       </div>
       <div class="toggle"><div>Hands-free<small>The mic reopens after every turn. No tapping.</small></div><input type="checkbox" id="hands" ${s.handsFree ? 'checked' : ''} /></div>
+      <div class="toggle"><div>Pixel-art portraits<small>Chunky retro sprites on the lens instead of smooth shading.</small></div><input type="checkbox" id="pixel" ${s.pixelArt ? 'checked' : ''} /></div>
 
       <h3 style="margin-top:16px">Dungeon Master</h3>
       <div class="toggle"><div>AI Dungeon Master<small>Narrates, invents encounters, and rules on anything you say.</small></div><input type="checkbox" id="ai" ${s.ai ? 'checked' : ''} /></div>
@@ -258,6 +268,7 @@ export function mountPhone(root: HTMLElement, app: App) {
     })
     q<HTMLInputElement>('#ai').addEventListener('change', e => app.updateSettings({ ai: (e.target as HTMLInputElement).checked }))
     q<HTMLInputElement>('#hands').addEventListener('change', e => app.updateSettings({ handsFree: (e.target as HTMLInputElement).checked }))
+    q<HTMLInputElement>('#pixel').addEventListener('change', e => app.updateSettings({ pixelArt: (e.target as HTMLInputElement).checked }))
     q<HTMLSelectElement>('#speech').addEventListener('change', e => {
       app.updateSettings({ speech: (e.target as HTMLSelectElement).value as SpeechProvider })
       renderSettings()

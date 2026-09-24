@@ -72,13 +72,15 @@ export interface Settings {
   speech: SpeechProvider
   /** Chosen speech model per cloud provider; '' = that provider's default. */
   speechModels: Partial<Record<CloudSpeechProvider, string>>
+  /** Chunky pixel-art portraits on the lens (vs. smooth). */
+  pixelArt: boolean
   /** Cloud API keys, per provider. They live only in the app's private host storage. */
   keys: Partial<Record<Provider, string>>
   /** Chosen model per provider; '' = that provider's default. */
   models: Partial<Record<Provider, string>>
 }
 
-export const DEFAULT_SETTINGS: Settings = { server: '', ai: true, handsFree: false, provider: 'local', keys: {}, models: {}, speech: 'server', speechModels: {} }
+export const DEFAULT_SETTINGS: Settings = { server: '', ai: true, handsFree: false, provider: 'local', keys: {}, models: {}, speech: 'server', speechModels: {}, pixelArt: true }
 
 /** Fills in fields added since a settings blob was saved. */
 export function migrateSettings(saved: Partial<Settings> & { model?: string }): Settings {

@@ -7,8 +7,9 @@
 // something else) is sent to the DM, because a local model takes a second or
 // two and the options don't.
 
-import { Game, ROOMS_PER_FLOOR, type Option, type Mode, type Ruling } from './engine/game.ts'
-import { COMBAT_EFFECTS, EVENT_EFFECTS, CONSUMABLES, themeFor, classDef, type EffectKind } from './engine/data.ts'
+import { Game, ROOMS_PER_FLOOR, heroPreview, type Option, type Mode, type Ruling } from './engine/game.ts'
+import { COMBAT_EFFECTS, EVENT_EFFECTS, CONSUMABLES, CLASSES, themeFor, classDef, type EffectKind } from './engine/data.ts'
+import { LIST_ROWS, STORY_INNER_W, lines } from './lens.ts'
 import { itemWords, type Item } from './engine/items.ts'
 import { matchIntent, matchCommand, tokens } from './intent.ts'
 import { DungeonMaster } from './dm.ts'
@@ -34,6 +35,17 @@ export interface LogEntry {
 const EXPLORE_EFFECTS: EffectKind[] = ['none', 'heal', 'hurt', 'gold', 'lose_gold', 'item', 'bless', 'curse', 'poison']
 const FLASH_MS = 3500
 const HANDS_FREE_MISSES = 3
+
+/**
+ * The hero picker's pills. The labels never change as you browse, so the
+ * list isn't rebuilt and the selection stays on "Next": tap, tap, tap.
+ */
+const HERO_PILLS: Option[] = [
+  { id: 'hero:choose', label: 'Choose this hero', words: ['choose this hero', 'choose', 'this one', 'pick this one', 'select', 'yes', 'play this'] },
+  { id: 'hero:next', label: 'Next hero ▶', words: ['next', 'next hero', 'another', 'show me another', 'next one'] },
+  // Voice only: with Speak, three pills is all the lens shows without paging.
+  { id: 'hero:prev', label: '◀ Previous hero', words: ['previous', 'previous hero', 'go back', 'last one'], hidden: true },
+]
 
 /** The first pill when voice is set up: a tap without swiping means "talk". */
 export const SPEAK: Option = { id: 'speak', label: '● Speak', words: [] }
@@ -68,6 +80,11 @@ export class App {
   page: Page | null = null
   /** The main menu: open at launch, and on double-tap from anywhere (pause). */
   menu = { open: true, confirm: false }
+  /** Which hero the picker is showing. */
+  heroIndex = 0
+  /** Which page of pills the lens shows (see lensItems). */
+  lensPage = 0
+  private pageKey = ''
   flash = ''
   busy = ''
   log: LogEntry[] = []
@@ -301,6 +318,7 @@ export class App {
     if (this.menu.open) return this.menuOptions()
     const g = this.game
     const opts = g.options()
+    if (g.mode === 'class') opts.push(...HERO_PILLS.map(o => ({ ...o, hidden: true })))
     const mode = g.mode
     if (g.run && !['combat', 'class', 'name', 'dead', 'loot', 'perk'].includes(mode)) {
       for (const it of g.run.hero.pack) {
@@ -339,7 +357,7 @@ export class App {
   }
 
   /** Picks an option by id (gestures, buttons, and matched speech). */
-  pick(id: string, target?: number) {
+  pick(id: string, target?: number): void {
     const g = this.game
     this.page = null
     if (id === 'speak') {
@@ -347,6 +365,15 @@ export class App {
       return void this.listen()
     }
     if (id.startsWith('menu:')) return this.onMenuPick(id.slice(5))
+    if (id === 'nav:more') {
+      this.lensPage++
+      return this.emit()
+    }
+    if (id === 'hero:next' || id === 'hero:prev') {
+      this.heroIndex = (this.heroIndex + (id === 'hero:next' ? 1 : CLASSES.length - 1)) % CLASSES.length
+      return this.emit()
+    }
+    if (id === 'hero:choose') return this.pick(`class:${CLASSES[this.heroIndex % CLASSES.length].id}`)
     if (id.startsWith('use:')) {
       const res = g.useOutside(id.slice(4))
       if (!res.ok) return this.setFlash(res.reason ?? 'Not now.')
@@ -450,8 +477,40 @@ export class App {
    * there after every change.
    */
   lensItems(): Option[] {
-    const opts = this.visibleOptions()
-    return this.voiceReady ? [SPEAK, ...opts] : opts
+    const opts = !this.menu.open && this.game.mode === 'class' ? HERO_PILLS.filter(o => !o.hidden) : this.visibleOptions()
+    const all = this.voiceReady ? [SPEAK, ...opts] : opts
+    // New options, new first page.
+    const key = all.map(o => o.id).join('|')
+    if (key !== this.pageKey) {
+      this.pageKey = key
+      this.lensPage = 0
+    }
+    if (all.length <= LIST_ROWS) return all
+    // Real glasses don't scroll a list past its box, so page it ourselves:
+    // LIST_ROWS - 1 options per page, then a pill that turns the page.
+    const per = LIST_ROWS - 1
+    const pages = Math.ceil(all.length / per)
+    const page = this.lensPage % pages
+    const last = page === pages - 1
+    return [
+      ...all.slice(page * per, page * per + per),
+      { id: 'nav:more', label: last ? '▲ Back to the top' : `More ▼ ${page + 1}/${pages}`, words: [] },
+    ]
+  }
+
+  /** The hero picker's card for the lens: who they are and what they start with. */
+  heroCard(): { icon: IconName; caption: string; text: string } {
+    const c = CLASSES[this.heroIndex % CLASSES.length]
+    const p = heroPreview(c.id)
+    // Three lines: background, what they carry, and the six scores. Skills
+    // join the middle line only if it still fits on one.
+    const kit = `HP ${p.hp} · AC ${p.ac} · ${p.weapon}`
+    const withSkills = `${kit} · ${p.skills.join(', ')}`
+    return {
+      icon: c.icon,
+      caption: `${p.name} ${this.heroIndex % CLASSES.length + 1}/${CLASSES.length}`,
+      text: [p.blurb, lines(withSkills, STORY_INNER_W) <= 1 ? withSkills : kit, p.stats].join('\n'),
+    }
   }
 
   /** A tap on the pill list: whichever pill the firmware had selected. */
@@ -674,9 +733,7 @@ export class App {
     if (this.voice === 'transcribing') return `◐ ${this.partial ? `"${this.partial}"` : 'Hearing you…'}`
     if (this.voice === 'thinking') return `◐ ${this.busy || 'Thinking…'}`
     if (this.flash) return this.flash
-    // The lens shows three pills at a time; say when there are more below.
-    const count = this.lensItems().length
-    const swipe = count > 3 ? `swipe ▼ ${count} options` : 'swipe + tap to choose'
+    const swipe = 'swipe + tap to choose'
     if (this.menu.open) return this.runAlive ? `${swipe}   double-tap: resume` : swipe
     // Under an AI narration, the numbers it left out.
     const tally = this.story().tally

@@ -32,7 +32,7 @@ import { portrait } from './art'
 import type { IconName } from './icons.gen'
 import {
   HEADER, BODY, FOOTER, CAPTION, ART, STORY, LIST,
-  spread, footerLine, lensSafe, fitStory, pillText, captionText, paginate, pageDots,
+  spread, footerLine, lensSafe, fitStory, pillText, captionText, paginate, pageDots, clampLines, STORY_INNER_W,
 } from './lens'
 
 export interface GlassesHost {
@@ -269,6 +269,12 @@ export class Glasses {
       const m = app.menuScene()
       return { layout: 'game', header, body: fitStory(m.text, '', 'start'), items, caption: m.caption, footer: footerLine(app.footer()), icon: m.icon, dim: false }
     }
+    if (g.mode === 'class') {
+      const h = app.heroCard()
+      // Three fixed lines; each is cut to one lens line so they never run together.
+      const body = h.text.split('\n').slice(0, 3).map(l => clampLines(l, 1, STORY_INNER_W)).join('\n')
+      return { layout: 'game', header, body, items, caption: h.caption, footer: footerLine(app.footer()), icon: h.icon, dim: false }
+    }
     const scene = g.scene()
     return {
       layout: 'game',
@@ -316,10 +322,11 @@ export class Glasses {
   }
 
   private async pushArt(icon: IconName, dim: boolean) {
-    const key = `${icon}|${dim}`
+    const pixel = this.app.settings.pixelArt
+    const key = `${icon}|${dim}|${pixel}`
     if (this.artKey === key) return
     this.artKey = key
-    const bytes = await portrait(icon, { size: ART.w, dim })
+    const bytes = await portrait(icon, { size: ART.w, dim, pixel })
     if (this.artKey !== key) return // the scene moved on while it rendered
     const result = await this.host.updateImageRawData(new ImageRawDataUpdate({ containerID: ART.id, containerName: ART.name, imageData: bytes }))
     if (result !== 'success') console.warn('portrait push:', result)

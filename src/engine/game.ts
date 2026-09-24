@@ -2652,3 +2652,23 @@ export function shortName(name: string): string {
     .replace(/Cloak of Displacement/, 'Displacer Cloak')
 }
 
+
+/** What a class starts with, for the hero picker: computed by the real rules, not typed in. */
+export function heroPreview(cls: ClassId) {
+  const g = new Game(null, [], 1)
+  g.newHero(cls)
+  const h = g.run!.hero
+  const c = classDef(cls)
+  const comp = g.run!.companion ? COMPANIONS.find(x => x.id === g.run!.companion!.id) : undefined
+  return {
+    name: c.name,
+    icon: c.icon,
+    blurb: c.blurb,
+    hp: g.maxHp(),
+    ac: g.ac(),
+    weapon: `${itemName(h.weapon)} ${itemDesc(h.weapon).split(',')[0]}`,
+    stats: (['str', 'dex', 'con', 'int', 'wis', 'cha'] as Ability[]).map(a => `${a.toUpperCase()} ${h.stats[a]}`).join(' '),
+    skills: g.knownSkills().map(s => SKILLS[s].name),
+    companion: comp ? `${comp.name} the ${comp.kind}` : '',
+  }
+}

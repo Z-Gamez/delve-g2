@@ -86,8 +86,16 @@ error messages. The only URLs in the bundle are the whitelisted API origins.
 ## Controls
 
 Options appear on the lens as a list of pills. The one you're on is outlined and bright, and each pill shows a
-short detail such as a perk's effect, a door's hint or an item's price. Three fit at a time, and the footer says when
-there are more.
+short detail such as a perk's effect, a door's hint or an item's price. The lens shows at most three pills; when
+there are more, the last one is **More ▼**, which turns the page. (Real glasses don't scroll a list past its box, so
+Delve pages it itself.)
+
+**Choosing a hero** is a card per class: the portrait, the background, starting HP, AC and weapon, and the six
+ability scores. Tap **Next hero ▶** to flip through them; the pill stays put, so it's tap, tap, tap. Then tap
+**Choose this hero**, or just say the class name.
+
+Portraits are **pixel art** by default: each icon is rendered as a ~45px sprite with 5 greys and scaled up with hard
+edges. Settings → Voice → Pixel-art portraits switches back to smooth shading.
 
 | Glasses | Does |
 |---|---|

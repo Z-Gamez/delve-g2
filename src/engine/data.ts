@@ -50,7 +50,7 @@ export const CLASSES: ClassDef[] = [
     armor: 'heavy', saves: ['str', 'con'], weapon: 'longsword', armorPiece: 'chain-mail',
     pack: ['healing', 'healing'],
     skills: [{ id: 'second-wind', level: 1 }, { id: 'action-surge', level: 1 }, { id: 'cleave', level: 3 }, { id: 'shield-wall', level: 6 }],
-    blurb: 'Heavy armor, a big sword, and the nerve to use both.',
+    blurb: 'Heavy armor, a big sword, and nerves of steel.',
     words: ['fighter', 'warrior', 'knight', 'soldier'],
   },
   {
@@ -59,7 +59,7 @@ export const CLASSES: ClassDef[] = [
     armor: 'light', saves: ['dex', 'int'], weapon: 'rapier', armorPiece: 'leather',
     pack: ['healing', 'skeleton-key'],
     skills: [{ id: 'hide', level: 1 }, { id: 'poison-blade', level: 1 }, { id: 'evasion', level: 4 }, { id: 'assassinate', level: 7 }],
-    blurb: 'Strike from the shadows. Sneak attacks hit very hard.',
+    blurb: 'Strike from the shadows. Sneak attacks hit hard.',
     words: ['rogue', 'thief', 'assassin', 'rouge', 'road'],
   },
   {
@@ -77,7 +77,7 @@ export const CLASSES: ClassDef[] = [
     armor: 'medium', shield: 2, saves: ['wis', 'cha'], spell: 'wis', weapon: 'mace', armorPiece: 'scale',
     pack: ['healing'],
     skills: [{ id: 'sacred-flame', level: 1 }, { id: 'cure-wounds', level: 1 }, { id: 'guiding-bolt', level: 1 }, { id: 'turn-undead', level: 3 }, { id: 'spirit-guardians', level: 5 }],
-    blurb: 'Heals, smites, and sends the dead back to their graves.',
+    blurb: 'Heals, smites, and puts the dead back to rest.',
     words: ['cleric', 'priest', 'healer', 'paladin', 'clerk'],
   },
   {
@@ -87,7 +87,7 @@ export const CLASSES: ClassDef[] = [
     pack: ['healing'],
     skills: [{ id: 'hunters-mark', level: 1 }, { id: 'ensnare', level: 1 }, { id: 'volley', level: 3 }, { id: 'hail-of-thorns', level: 6 }],
     companion: 'wolf',
-    blurb: 'A longbow, a keen eye, and a loyal wolf at your side.',
+    blurb: 'A longbow, a keen eye, and a loyal wolf.',
     words: ['ranger', 'archer', 'hunter', 'strider'],
   },
   {

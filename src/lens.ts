@@ -30,10 +30,15 @@ export const ART = { id: 4, name: 'art', x: 4, y: 40, w: 136, h: 136 }
 // The game layout: a three-line story strip, then the options as a native
 // list. The firmware draws the hovered item as a rounded pill and moves it on
 // swipe by itself (no round trip per move), and reports the index on tap.
-// Rows are ~40px apart, so 122px shows three pills with a fourth peeking to
-// say "there's more".
-export const STORY = { id: 2, name: 'story', x: 146, y: 37, w: LENS_W - 146, h: 92, pad: 4, brightness: 4 }
-export const LIST = { id: 6, name: 'opts', x: 146, y: 129, w: LENS_W - 146, h: 122, pad: 2 }
+//
+// Rows are 40px apart, and the list must hold exactly LIST_ROWS of them with
+// room to spare: on real glasses a list longer than its box does NOT scroll
+// its view (the simulator does), so anything below the box is simply unseen.
+// The app pages options itself instead -- never more than LIST_ROWS pills,
+// the last one "More" when there are more.
+export const LIST_ROWS = 3
+export const STORY = { id: 2, name: 'story', x: 146, y: 37, w: LENS_W - 146, h: 88, pad: 3, brightness: 4 }
+export const LIST = { id: 6, name: 'opts', x: 146, y: 125, w: LENS_W - 146, h: 126, pad: 2 }
 export const STORY_INNER_W = STORY.w - 2 * STORY.pad
 export const STORY_ROWS = Math.floor((STORY.h - 2 * STORY.pad) / LINE_H) // 3
 /** Width a pill's text may take: the list's inner width less the pill's own padding. */
