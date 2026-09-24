@@ -1,0 +1,8 @@
+node_modules
+dist
+*.ehpk
+server/config.json
+server/models/
+server/*.log
+server/__pycache__/
+server/.venv/

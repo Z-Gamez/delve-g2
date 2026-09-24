@@ -1,0 +1,30 @@
+{
+  "package_id": "com.zacki.delve",
+  "edition": "202601",
+  "name": "Delve",
+  "version": "1.1.0",
+  "min_sdk_version": "0.0.14",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "g2-microphone",
+      "desc": "Hear what you tell your hero to do. Speech is sent only to the speech server you run on your own computer."
+    },
+    {
+      "name": "network",
+      "desc": "Optional. Connect to the Delve server on your own computer (speech recognition and a local AI Dungeon Master), or to Claude, ChatGPT or OpenRouter with your own API key for a cloud AI Dungeon Master.",
+      "whitelist": [
+        "http://*.ts.net:8790",
+        "ws://*.ts.net:8790",
+        "http://delve.local:8790",
+        "ws://delve.local:8790",
+        "https://api.anthropic.com",
+        "https://api.openai.com",
+        "https://openrouter.ai"
+      ]
+    }
+  ],
+  "supported_languages": [
+    "en"
+  ]
+}

@@ -1,0 +1,4 @@
+aiohttp>=3.9
+faster-whisper>=1.0
+numpy
+zeroconf

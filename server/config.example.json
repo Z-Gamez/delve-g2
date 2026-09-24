@@ -1,0 +1,12 @@
+{
+  "python": "",
+  "host": "0.0.0.0",
+  "port": 8790,
+  "mdns": true,
+  "ollama_url": "http://127.0.0.1:11434",
+  "ollama_model": "qwen3:4b",
+  "whisper_model": "small.en",
+  "whisper_device": "auto",
+  "language": "en",
+  "end_silence_seconds": 1.0
+}
