@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- Dev-only probe: how the G2 firmware draws a list container. -->
+<html lang="en">
+  <head><meta charset="UTF-8" /><title>list probe</title></head>
+  <body>
+    <script type="module">
+      import {
+        waitForEvenAppBridge, CreateStartUpPageContainer, RebuildPageContainer, TextContainerProperty, ListContainerProperty, ListItemContainerProperty,
+      } from '@evenrealities/even_hub_sdk'
+      const q = new URLSearchParams(location.search)
+      const itemWidth = Number(q.get('w') || 0)
+      const x = Number(q.get('x') || 146)
+      const y = Number(q.get('y') || 150)
+      const w = Number(q.get('lw') || 430)
+      const h = Number(q.get('lh') || 100)
+      const items = (q.get('items') || 'Speak,Attack,Fire Bolt,Magic Missile x4,Shield x2,Potion x1,Flee').split(',')
+      const bridge = await waitForEvenAppBridge()
+      const page = {
+        containerTotalNum: 2,
+        textObject: [new TextContainerProperty({ xPosition: 0, yPosition: 0, width: 576, height: 35, containerID: 1, containerName: 'hdr', content: `list probe w=${itemWidth} ${w}x${h}`, isEventCapture: 0 })],
+        listObject: [new ListContainerProperty({
+          xPosition: x, yPosition: y, width: w, height: h, borderWidth: 0, borderColor: 5, borderRadius: 8, paddingLength: 4,
+          containerID: 2, containerName: 'opts', isEventCapture: 1,
+          itemContainer: new ListItemContainerProperty({ itemCount: items.length, itemWidth, isItemSelectBorderEn: 1, itemName: items }),
+        })],
+      }
+      const r = await bridge.createStartUpPageContainer(new CreateStartUpPageContainer(page))
+      if (r !== 0) await bridge.rebuildPageContainer(new RebuildPageContainer(page))
+      window.__events = []
+      const { TextContainerUpgrade } = await import('@evenrealities/even_hub_sdk')
+      let n = 0
+      bridge.onEvenHubEvent(e => {
+        window.__events.push(e)
+        const l = e.listEvent
+        const summary = l ? `#${++n} list type=${l.eventType} idx=${l.currentSelectItemIndex} name=${l.currentSelectItemName}` : `#${++n} ${JSON.stringify(e).slice(0, 60)}`
+        void bridge.textContainerUpgrade(new TextContainerUpgrade({ containerID: 1, containerName: 'hdr', content: summary }))
+      })
+    </script>
+  </body>
+</html>

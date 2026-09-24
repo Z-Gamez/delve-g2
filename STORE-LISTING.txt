@@ -1,0 +1,17 @@
+DESCRIPTION
+Endless D&D roguelike you play by voice, AI-run DM
+
+ABOUT AND SETUP
+Delve is an endless D&D-style roguelike you play with your voice. Tap the glasses and say what your hero does: "cast fireball", "attack the second goblin", "drink a potion", "go left". Say anything else, like "kick the brazier onto the orc", and the AI Dungeon Master picks the ability check, the dice decide, and the outcome is narrated on your lens.
+
+Pick one of six classes: Fighter, Rogue, Wizard, Cleric, Ranger or Barbarian. Every step offers a choice of doors: fights, elite monsters, treasure chests (some of them bite), shrines, merchants, campfires, traps and mystery encounters the AI invents on the spot. Battle 40 monsters and a boss every third floor. Find magic weapons, potions, scrolls and rings, choose a power-up at every level, and recruit companions like a wolf, a dwarf or a fairy healer. Death is permanent, the dungeon never ends, and fallen heroes join the Hall of Fame. Your run saves after every turn.
+
+No voice? Swipe through the option pills and tap to pick. Double-tap any time for the main menu to pause or start over. Everything also works from the phone.
+
+SETUP
+1. Voice needs the free Delve server on your Windows PC: github.com/Z-Gamez/delve-g2 (server folder). It turns speech into text with Whisper and can run a local AI Dungeon Master with Ollama. Your phone reaches it over Tailscale or the same Wi-Fi, and your voice never leaves your own PC.
+2. In Delve on your phone, open Settings and enter your PC's Tailscale MagicDNS name (like my-pc.tail1234.ts.net) or delve.local. Port 8790 is added for you.
+3. Choose the Dungeon Master: Local runs free on your PC, or pick Claude, ChatGPT or OpenRouter and paste your own API key. Keys stay on your phone and are sent only to that provider. Each narrated turn is a small charge on your account.
+4. Tap Speak and talk. Press and hold for the glasses menu: character sheet, inventory, hands-free mode, how to play and the Hall of Fame.
+
+Icons from game-icons.net, CC BY 3.0.

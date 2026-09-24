@@ -170,6 +170,8 @@ export interface Option {
   words: string[]
   /** Voice-only: understood but not listed on the lens. */
   hidden?: boolean
+  /** A few words after the label on the lens pill ("+2 max HP per level"). */
+  detail?: string
 }
 
 export interface Scene {
@@ -2300,7 +2302,7 @@ export class Game {
   options(): Option[] {
     const mode = this.mode
     if (mode === 'class') {
-      return CLASSES.map(c => ({ id: `class:${c.id}`, label: c.name, words: c.words }))
+      return CLASSES.map(c => ({ id: `class:${c.id}`, label: c.name, words: c.words, detail: c.blurb }))
     }
     const r = this.r
     const h = this.hero
@@ -2314,7 +2316,7 @@ export class Game {
           const words = [name.toLowerCase(), ...(d.hidden ? ['dark', 'darkness', 'unknown', 'mystery'] : [ROOM_INFO[d.kind].name.toLowerCase(), d.kind])]
           if (name === 'Middle') words.push('center', 'centre', 'straight', 'ahead', 'forward')
           if (name === 'Onward') words.push('go', 'enter', 'open', 'forward', 'onward', 'boss', 'fight')
-          return { id: `door:${i}`, label: `${name}: ${kind}`, words }
+          return { id: `door:${i}`, label: `${name}: ${kind}`, words, detail: d.hint }
         })
       case 'combat':
         return this.combatOptions()
@@ -2336,7 +2338,7 @@ export class Game {
         if (p?.kind !== 'perk') return [{ id: 'skip', label: 'Continue', words: ['continue'] }]
         return p.choices.map(id => {
           const def = PERKS.find(x => x.id === id)!
-          return { id: `perk:${id}`, label: def.name, words: def.words }
+          return { id: `perk:${id}`, label: def.name, words: def.words, detail: def.blurb }
         })
       }
       case 'treasure': {
@@ -2367,6 +2369,7 @@ export class Game {
         const opts: Option[] = room.stock.map((s, i) => ({
           id: `buy:${i}`,
           label: `${shortName(itemName(s.item))} ${s.price}g`,
+          detail: itemDesc(s.item),
           words: itemWords(s.item).flatMap(w => [w, `buy ${w}`]),
         }))
         for (const it of h.pack) {
@@ -2390,7 +2393,7 @@ export class Game {
         const room = r.room
         if (room?.kind !== 'event') return []
         return [
-          ...room.ev.choices.map((c, i) => ({ id: `choice:${i}`, label: c.label, words: [c.label.toLowerCase(), ...c.label.toLowerCase().split(' ').filter(w => w.length > 3)] })),
+          ...room.ev.choices.map((c, i) => ({ id: `choice:${i}`, label: c.label, detail: c.ability === 'none' ? '' : c.ability.toUpperCase(), words: [c.label.toLowerCase(), ...c.label.toLowerCase().split(' ').filter(w => w.length > 3)] })),
           { id: 'leave', label: 'Leave', words: ['leave', 'walk away', 'ignore', 'move on'] },
         ]
       }
@@ -2443,7 +2446,7 @@ export class Game {
       if (max !== null && left <= 0) continue
       if (id === 'turn-undead' && !alive.some(x => x.e.traits.includes('undead'))) continue
       if (id === 'rage' && h.fx.rage) continue
-      opts.push({ id: `skill:${id}`, label: `${def.name}${max !== null ? ` ×${left}` : ''}`, words: def.words })
+      opts.push({ id: `skill:${id}`, label: `${def.name}${max !== null ? ` ×${left}` : ''}`, words: def.words, detail: def.blurb })
     }
     const heal = ['superior-healing', 'greater-healing', 'healing'].find(b => this.countOf(b))
     if (heal) {
@@ -2482,14 +2485,14 @@ export class Game {
         return { ...base, title: c.name, prompt: `What do they call you, ${c.name}? Say your name, or keep "${h.name}".` }
       case 'doors': {
         const parts = r.doors.map((d, i) => `${this.doorName(i, r.doors.length)}: ${d.hint}.`)
-        const intro = r.doors.length === 1 ? (r.doors[0].kind === 'boss' ? 'A great door, carved with warnings. Something waits beyond.' : parts[0]) : parts.join(' ')
+        const intro = r.doors.length === 1 ? (r.doors[0].kind === 'boss' ? 'A great door, carved with warnings. Something waits beyond.' : parts[0]) : 'Which way?'
         return { ...base, icon: r.doors[0]?.kind === 'boss' ? 'crowned-skull' : 'wooden-door', caption: `Room ${r.step + 1}/${ROOMS_PER_FLOOR}`, bar: null, prompt: intro }
       }
       case 'combat': {
         const cb = r.combat!
         const t = cb.enemies[cb.focus]?.hp > 0 ? cb.enemies[cb.focus] : this.alive()[0]
         const foes = this.alive().map(e => `${e.name} ${e.hp}/${e.maxHp}`).join(' · ')
-        const prompt = cb.menu === 'items' ? 'Which item?' : `${foes}${h.fx.stunned ? ' · You are stunned!' : ''}`
+        const prompt = cb.menu === 'items' ? 'Which item?' : `${this.alive().length > 1 ? foes : ''}${h.fx.stunned ? ' You are stunned!' : ''}`.trim()
         return { ...base, icon: t?.icon ?? base.icon, caption: t?.name ?? '', bar: t ? { hp: t.hp, max: t.maxHp } : null, prompt }
       }
       case 'loot': {

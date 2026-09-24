@@ -1,9 +1,17 @@
 // Everything written to the glasses, and every gesture read from them.
 //
-// One fixed page layout for the whole game (portrait, caption, body, header,
-// footer), created once; after that only changed text is re-sent, because
-// every write is a BLE round trip. Portraits are pushed only when the subject
-// changes.
+// Two page layouts:
+//
+//   game   portrait + caption, a three-line story strip, and the options as a
+//          native list: the firmware draws the hovered option as a rounded
+//          pill, moves it on swipe by itself, and reports the index on tap.
+//   page   a scrollable text body (character sheet, inventory, help), where
+//          swipes turn pages.
+//
+// The list can't be edited in place, so a new set of options means a
+// rebuildPageContainer (which also resets the pill to the top -- to Speak,
+// when voice is on). Everything else is re-sent only when it changed, because
+// every write is a BLE round trip; the portrait only when the subject changes.
 
 import {
   CreateStartUpPageContainer,
@@ -12,6 +20,8 @@ import {
   TextContainerUpgrade,
   ImageContainerProperty,
   ImageRawDataUpdate,
+  ListContainerProperty,
+  ListItemContainerProperty,
   MenuContainerProperty,
   MenuItemProperty,
   OsEventTypeList,
@@ -21,8 +31,8 @@ import type { App } from './app'
 import { portrait } from './art'
 import type { IconName } from './icons.gen'
 import {
-  HEADER, BODY, FOOTER, CAPTION, ART,
-  spread, footerLine, lensSafe, fitBody, optionRows, captionText, paginate, pageDots,
+  HEADER, BODY, FOOTER, CAPTION, ART, STORY, LIST,
+  spread, footerLine, lensSafe, fitStory, pillText, captionText, paginate, pageDots,
 } from './lens'
 
 export interface GlassesHost {
@@ -33,17 +43,25 @@ export interface GlassesHost {
   shutDownPageContainer(mode?: number): Promise<boolean>
 }
 
+type Layout = 'game' | 'page'
+
 /** What's on the lens, for the phone's mirror. */
 export interface LensFrame {
+  layout: Layout
   header: string
+  /** The story strip (game) or page text (page). */
   body: string
+  /** Pill labels, top to bottom (game only). */
+  items: string[]
   caption: string
   footer: string
   icon: IconName
   dim: boolean
 }
 
-const MENU = { sheet: 1, inventory: 2, help: 3, handsFree: 4, hall: 5 } as const
+const MENU = { sheet: 1, inventory: 2, help: 3, handsFree: 4, hall: 5, main: 6 } as const
+/** Pills are one line; the firmware truncates, but a budget keeps the payload small. */
+const MAX_ITEMS = 20
 
 interface Features {
   menu: boolean
@@ -52,12 +70,14 @@ interface Features {
 
 export class Glasses {
   private features: Features = { menu: true, brightness: true }
+  private layout: Layout | null = null
+  private listKey = ''
   private sent: Record<string, string> = {}
   private artKey = ''
   private queue: Promise<unknown> = Promise.resolve()
   private pending = false
   private started = false
-  frame: LensFrame = { header: '', body: '', caption: '', footer: '', icon: 'dice-twenty-faces-twenty', dim: false }
+  frame: LensFrame = { layout: 'game', header: '', body: '', items: [], caption: '', footer: '', icon: 'dice-twenty-faces-twenty', dim: false }
 
   constructor(
     private host: GlassesHost,
@@ -76,6 +96,7 @@ export class Glasses {
    * bounded; a plainer page beats a blank lens.
    */
   async start(): Promise<void> {
+    const f = this.compose()
     const attempts: Features[] = [
       { menu: true, brightness: true },
       { menu: false, brightness: true },
@@ -87,7 +108,7 @@ export class Glasses {
       let result = -1
       try {
         result = await Promise.race([
-          this.host.createStartUpPageContainer(new CreateStartUpPageContainer(this.containers())),
+          this.host.createStartUpPageContainer(new CreateStartUpPageContainer(this.containers(f))),
           new Promise<number>(resolve => setTimeout(() => resolve(-1), 4000)),
         ])
       } catch (err) {
@@ -98,14 +119,10 @@ export class Glasses {
         break
       }
     }
-    // After a WebView reload the host can keep the previous page, and "success"
-    // doesn't mean it was replaced. Rebuild once into a known layout.
     if (!ok) this.features = { menu: true, brightness: false }
-    const rebuilt = await this.host.rebuildPageContainer(new RebuildPageContainer(this.containers())).catch(() => false)
-    if (!rebuilt && this.features.menu) {
-      this.features = { ...this.features, menu: false }
-      await this.host.rebuildPageContainer(new RebuildPageContainer(this.containers())).catch(() => false)
-    }
+    // After a WebView reload the host can keep the previous page, and "success"
+    // doesn't mean it was replaced; the first paint rebuilds into a known one.
+    this.layout = null
     this.started = true
     this.render()
   }
@@ -128,11 +145,12 @@ export class Glasses {
     })
   }
 
-  private containers() {
+  private containers(f: LensFrame) {
     const menu = this.features.menu
       ? {
           menuObject: new MenuContainerProperty({
             menuItems: [
+              new MenuItemProperty({ itemID: MENU.main, itemName: 'Main menu' }),
               new MenuItemProperty({ itemID: MENU.sheet, itemName: 'Character' }),
               new MenuItemProperty({ itemID: MENU.inventory, itemName: 'Inventory' }),
               new MenuItemProperty({ itemID: MENU.handsFree, itemName: 'Hands-free on/off' }),
@@ -142,17 +160,36 @@ export class Glasses {
           }),
         }
       : {}
-    this.sent = {}
-    this.artKey = ''
+    const image = new ImageContainerProperty({ xPosition: ART.x, yPosition: ART.y, width: ART.w, height: ART.h, containerID: ART.id, containerName: ART.name })
+    if (f.layout === 'page') {
+      return {
+        containerTotalNum: 5,
+        textObject: [this.text(HEADER, ' ', false), this.text(BODY, ' ', true), this.text(FOOTER, ' ', false), this.text(CAPTION, ' ', false)],
+        imageObject: [image],
+        ...menu,
+      }
+    }
+    const items = f.items.length ? f.items : [' ']
     return {
-      containerTotalNum: 5,
-      textObject: [
-        this.text(HEADER, ' ', false),
-        this.text(BODY, 'Loading...', true),
-        this.text(FOOTER, ' ', false),
-        this.text(CAPTION, ' ', false),
+      containerTotalNum: 6,
+      textObject: [this.text(HEADER, ' ', false), this.text(STORY, ' ', false), this.text(FOOTER, ' ', false), this.text(CAPTION, ' ', false)],
+      imageObject: [image],
+      listObject: [
+        new ListContainerProperty({
+          xPosition: LIST.x,
+          yPosition: LIST.y,
+          width: LIST.w,
+          height: LIST.h,
+          borderWidth: 0,
+          borderColor: 5,
+          borderRadius: 8,
+          paddingLength: LIST.pad,
+          containerID: LIST.id,
+          containerName: LIST.name,
+          isEventCapture: 1,
+          itemContainer: new ListItemContainerProperty({ itemCount: items.length, itemWidth: 0, isItemSelectBorderEn: 1, itemName: items }),
+        }),
       ],
-      imageObject: [new ImageContainerProperty({ xPosition: ART.x, yPosition: ART.y, width: ART.w, height: ART.h, containerID: ART.id, containerName: ART.name })],
       ...menu,
     }
   }
@@ -166,23 +203,27 @@ export class Glasses {
       return true
     }
     // CLICK_EVENT is 0 and protobuf drops zero values, so a bare tap arrives
-    // as an envelope with no eventType. Default inside the envelope check, or
-    // every event without a sysEvent would read as a tap.
+    // as an envelope with no eventType -- and the first list item as no index.
     const typeOf = (e?: { eventType?: OsEventTypeList }) => (e ? e.eventType ?? OsEventTypeList.CLICK_EVENT : null)
+    const list = typeOf(event.listEvent)
     const sys = typeOf(event.sysEvent)
     const txt = typeOf(event.textEvent)
-    const either = (t: OsEventTypeList) => sys === t || txt === t
-    if (either(OsEventTypeList.DOUBLE_CLICK_EVENT)) return this.app.double(), true
+    const any = (t: OsEventTypeList) => list === t || sys === t || txt === t
+    if (any(OsEventTypeList.DOUBLE_CLICK_EVENT)) return this.app.double(), true
     // A long press opens the glasses' own menu; acting on it here too would
     // do something behind that menu.
-    if (either(OsEventTypeList.LONG_PRESS_EVENT) || either(OsEventTypeList.LONG_PRESS_RELEASE_EVENT)) return true
-    if (txt === OsEventTypeList.SCROLL_TOP_EVENT) return this.app.swipe(-1), true
-    if (txt === OsEventTypeList.SCROLL_BOTTOM_EVENT) return this.app.swipe(1), true
-    if (either(OsEventTypeList.CLICK_EVENT)) return this.app.tap(), true
+    if (any(OsEventTypeList.LONG_PRESS_EVENT) || any(OsEventTypeList.LONG_PRESS_RELEASE_EVENT)) return true
+    if (list === OsEventTypeList.CLICK_EVENT) return this.app.tapItem(event.listEvent?.currentSelectItemIndex ?? 0), true
+    if (this.layout === 'page') {
+      if (txt === OsEventTypeList.SCROLL_TOP_EVENT) return this.app.swipe(-1), true
+      if (txt === OsEventTypeList.SCROLL_BOTTOM_EVENT) return this.app.swipe(1), true
+      if (txt === OsEventTypeList.CLICK_EVENT || sys === OsEventTypeList.CLICK_EVENT) return this.app.tap(), true
+    }
     return false
   }
 
   private onMenu(id: number) {
+    if (id === MENU.main) return this.app.openMenu()
     if (id === MENU.sheet) return this.app.openPage('sheet')
     if (id === MENU.inventory) return this.app.openPage('inventory')
     if (id === MENU.help) return this.app.openPage('help')
@@ -209,26 +250,31 @@ export class Glasses {
   private compose(): LensFrame {
     const app = this.app
     const g = app.game
-    const header = spread(app.headerLeft(), app.headerRight())
     if (app.page) {
       const p = app.page
       return {
+        layout: 'page',
         header: spread(`◆ ${p.title}`, pageDots(p.index, p.pages.length)),
         body: p.pages[p.index] ?? '',
+        items: [],
         caption: p.title,
         footer: footerLine(p.pages.length > 1 ? 'swipe: page   tap: close' : 'tap: close'),
         icon: p.icon,
         dim: false,
       }
     }
+    const header = spread(app.headerLeft(), app.headerRight())
+    const items = app.lensItems().slice(0, MAX_ITEMS).map(o => lensSafe(pillText(o.label, o.detail)))
+    if (app.menu.open) {
+      const m = app.menuScene()
+      return { layout: 'game', header, body: fitStory(m.text, '', 'start'), items, caption: m.caption, footer: footerLine(app.footer()), icon: m.icon, dim: false }
+    }
     const scene = g.scene()
-    const story = app.story()
-    const storyText = [story.text, story.tally ? `(${story.tally})` : ''].filter(Boolean).join(' ')
-    const opts = app.visibleOptions()
-    const highlight = app.selecting ? app.highlight : null
     return {
+      layout: 'game',
       header,
-      body: fitBody(storyText, scene.prompt, optionRows(opts, highlight), app.narration ? 'start' : 'end'),
+      body: fitStory(app.story().text, scene.prompt, app.narration ? 'start' : 'end'),
+      items,
       caption: captionText(scene.caption, scene.bar),
       footer: footerLine(app.footer()),
       icon: scene.icon,
@@ -241,8 +287,21 @@ export class Glasses {
     this.frame = f
     this.onFrame(f)
     if (!this.started) return
+    const listKey = f.items.join('\n')
+    if (f.layout !== this.layout || (f.layout === 'game' && listKey !== this.listKey)) {
+      const ok = await this.host.rebuildPageContainer(new RebuildPageContainer(this.containers(f)))
+      if (!ok && this.features.menu) {
+        // A host that took the menu at startup may still refuse it here.
+        this.features = { ...this.features, menu: false }
+        await this.host.rebuildPageContainer(new RebuildPageContainer(this.containers(f)))
+      }
+      this.layout = f.layout
+      this.listKey = listKey
+      this.sent = {}
+      this.artKey = ''
+    }
     await this.put(HEADER, f.header)
-    await this.put(BODY, f.body)
+    await this.put(f.layout === 'page' ? BODY : STORY, f.body)
     await this.put(CAPTION, f.caption)
     await this.put(FOOTER, f.footer)
     await this.pushArt(f.icon, f.dim)

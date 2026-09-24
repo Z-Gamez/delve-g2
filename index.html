@@ -58,6 +58,11 @@
       .lens .l-art.dim { opacity: 0.35; }
       .lens .l-cap { left: 0.7%; top: 63%; width: 24.3%; height: 24%; color: rgba(98, 245, 138, 0.8); }
       .lens .l-body { left: 25.3%; top: 12.8%; width: 74.3%; height: 74.3%; border: 1px solid var(--lens-faint); border-radius: 1.4cqw; padding: 1.2cqw 1.5cqw; }
+      /* game layout: story strip (x146 y37 430x92) over the pill list (y129 h122) */
+      .lens .l-story { left: 25.3%; top: 12.8%; width: 74.7%; height: 31.9%; padding: 0.7cqw; }
+      .lens .l-list { left: 25.3%; top: 44.8%; width: 74.7%; height: 42.4%; display: flex; flex-direction: column; gap: 0; padding: 0.35cqw; }
+      .lens .l-list span { display: block; padding: 0.9cqw 1.6cqw; margin-right: auto; border: 1px solid transparent; border-radius: 1.4cqw; color: var(--lens-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+      .lens .l-list span.sel { border-color: var(--lens); color: var(--lens); }
       .lens .l-ftr { left: 0.7%; top: 88.5%; width: 98.6%; height: 11%; color: var(--lens-dim); }
 
       .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-top: 12px; }
@@ -65,10 +70,11 @@
 
       .actions { display: flex; flex-wrap: wrap; gap: 8px; }
       .opt {
-        border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 9px 12px;
-        min-height: 42px; text-align: left;
+        border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 9px 16px;
+        min-height: 42px; text-align: left; max-width: 100%;
       }
-      .opt b { color: var(--accent); font-weight: 700; margin-right: 6px; }
+      .opt:hover, .opt:focus-visible { border-color: var(--lens); color: var(--lens); outline: none; }
+      .opt small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
       .opt:active { background: var(--accent-soft); }
 
       .say { display: flex; gap: 8px; margin-top: 12px; }

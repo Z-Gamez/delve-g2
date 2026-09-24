@@ -68,15 +68,22 @@ error messages. The only URLs in the bundle are the whitelisted API origins.
 
 ## Controls
 
+Options appear on the lens as a list of pills. The one you're on is outlined and bright, and each pill shows a
+short detail such as a perk's effect, a door's hint or an item's price. Three fit at a time, and the footer says when
+there are more.
+
 | Glasses | Does |
 |---|---|
-| Tap | Speak (tap again to send early). With a highlighted option, pick it. |
-| Swipe | Highlight an option (8 s), or turn pages |
-| Double-tap | Cancel listening, close a page, then (twice) leave. The run is saved. |
-| Press and hold | Menu: Character, Inventory, Hands-free, How to play, Hall of Fame |
+| Swipe | Move between pills. The firmware scrolls the list itself, with no delay. |
+| Tap | Pick the pill you're on. **Speak** is always the first pill when voice is set up, so a plain tap means "talk"; tap again to send early. |
+| Double-tap | Cancel listening or close a page. Otherwise open the **main menu** (pause), and double-tap again to resume. |
+| Press and hold | The glasses menu: Main menu, Character, Inventory, Hands-free, How to play, Hall of Fame. |
 
-You can say "inventory", "character", "help", "repeat" and "hands free" at any time. Hands-free mode reopens the
-mic after every turn.
+The **main menu** opens at launch and whenever you double-tap. It offers Continue, New run (asks before abandoning
+your hero), Hall of Fame, How to play, Hands-free and Exit. Your run is saved after every turn, so Exit keeps it.
+
+You can say "menu" or "pause", "inventory", "character", "help", "repeat" and "hands free" at any time. Hands-free
+mode reopens the mic after every turn.
 
 ## Setup
 

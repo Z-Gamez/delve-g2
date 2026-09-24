@@ -27,6 +27,18 @@ export const FOOTER = { id: 3, name: 'ftr', x: 0, y: 253, w: LENS_W, h: 35, pad:
 export const CAPTION = { id: 5, name: 'cap', x: 0, y: 180, w: 144, h: 70, pad: 4, brightness: 3 }
 export const ART = { id: 4, name: 'art', x: 4, y: 40, w: 136, h: 136 }
 
+// The game layout: a three-line story strip, then the options as a native
+// list. The firmware draws the hovered item as a rounded pill and moves it on
+// swipe by itself (no round trip per move), and reports the index on tap.
+// Rows are ~40px apart, so 122px shows three pills with a fourth peeking to
+// say "there's more".
+export const STORY = { id: 2, name: 'story', x: 146, y: 37, w: LENS_W - 146, h: 92, pad: 4, brightness: 4 }
+export const LIST = { id: 6, name: 'opts', x: 146, y: 129, w: LENS_W - 146, h: 122, pad: 2 }
+export const STORY_INNER_W = STORY.w - 2 * STORY.pad
+export const STORY_ROWS = Math.floor((STORY.h - 2 * STORY.pad) / LINE_H) // 3
+/** Width a pill's text may take: the list's inner width less the pill's own padding. */
+const PILL_TEXT_W = LIST.w - 2 * LIST.pad - 28
+
 export const BODY_INNER = {
   width: BODY.w - 2 * (BODY.pad + BODY.border),
   height: BODY.h - 2 * (BODY.pad + BODY.border),
@@ -138,7 +150,8 @@ export function hpBar(hp: number, max: number, width = CAPTION_INNER_W): string 
 export function captionText(caption: string, bar: { hp: number; max: number } | null): string {
   const name = pxTruncate(caption, CAPTION_INNER_W)
   if (!bar) return name
-  return `${name}\n${hpBar(bar.hp, bar.max)}`
+  const nums = `${Math.max(0, bar.hp)}/${bar.max} `
+  return `${name}\n${nums}${hpBar(bar.hp, bar.max, CAPTION_INNER_W - w(nums))}`
 }
 
 /**
@@ -173,6 +186,37 @@ export function fitSentences(text: string, max: number, keep: 'start' | 'end'): 
   }
   if (kept.length) return kept.join(' ')
   return keep === 'start' ? clampLines(text, max) : clampLinesFromStart(text, max)
+}
+
+/** The story strip: the prompt always shows; the story gets what's left. */
+export function fitStory(story: string, prompt: string, keep: 'start' | 'end'): string {
+  const w = STORY_INNER_W
+  const promptText = prompt ? clampLines(prompt, story ? 1 : STORY_ROWS, w) : ''
+  const room = STORY_ROWS - lines(promptText, w)
+  const storyText = story && room > 0 ? fitSentencesIn(story, room, keep, w) : ''
+  return [storyText, promptText].filter(Boolean).join('\n')
+}
+
+function fitSentencesIn(text: string, max: number, keep: 'start' | 'end', width: number): string {
+  if (lines(text, width) <= max) return text
+  const sentences = text.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g)?.map(s => s.trim()).filter(Boolean) ?? [text]
+  const order = keep === 'start' ? sentences : [...sentences].reverse()
+  let kept: string[] = []
+  for (const s of order) {
+    const next = keep === 'start' ? [...kept, s] : [s, ...kept]
+    if (lines(next.join(' '), width) > max) break
+    kept = next
+  }
+  if (kept.length) return kept.join(' ')
+  return keep === 'start' ? clampLines(text, max, width) : clampLinesFromStart(text, max, width)
+}
+
+/** One pill: the label, then its detail if there's room. */
+export function pillText(label: string, detail?: string): string {
+  const full = detail ? `${label} · ${detail}` : label
+  if (w(full) <= PILL_TEXT_W) return full
+  if (detail && w(label) + w(' · ') + w('abc…') < PILL_TEXT_W) return pxTruncate(full, PILL_TEXT_W)
+  return pxTruncate(label, PILL_TEXT_W)
 }
 
 /** Splits a long page (character sheet, inventory, help) into lens pages. */

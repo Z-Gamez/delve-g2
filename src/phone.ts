@@ -28,12 +28,15 @@ export function mountPhone(root: HTMLElement, app: App) {
         <span class="spacer"></span>
         <span class="pill" id="dmPill"></span>
         <span class="pill" id="micPill"></span>
+        <button class="btn" id="menuBtn">Menu</button>
       </div>
       <div class="lens" id="lens">
         <div class="l-hdr"></div>
         <div class="l-art"></div>
         <div class="l-cap"></div>
         <div class="l-body"></div>
+        <div class="l-story"></div>
+        <div class="l-list"></div>
         <div class="l-ftr"></div>
       </div>
       <button class="btn mic" id="mic" hidden></button>
@@ -72,6 +75,7 @@ export function mountPhone(root: HTMLElement, app: App) {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-id]')
     if (b) app.pick(b.dataset.id!)
   })
+  $('#menuBtn').addEventListener('click', () => (app.menu.open && app.runAlive ? app.pick('menu:continue') : app.openMenu()))
   mic.addEventListener('click', () => {
     if (app.voice === 'listening') app.stopListening()
     else void app.listen()
@@ -85,7 +89,13 @@ export function mountPhone(root: HTMLElement, app: App) {
 
   function drawLens(f: LensFrame) {
     lens.querySelector('.l-hdr')!.textContent = f.header
-    lens.querySelector('.l-body')!.textContent = f.body
+    const page = f.layout === 'page'
+    lens.querySelector<HTMLElement>('.l-body')!.hidden = !page
+    lens.querySelector<HTMLElement>('.l-story')!.hidden = page
+    lens.querySelector<HTMLElement>('.l-list')!.hidden = page
+    lens.querySelector(page ? '.l-body' : '.l-story')!.textContent = f.body
+    // The glasses start each new list with the first pill selected.
+    lens.querySelector('.l-list')!.innerHTML = f.items.map((t, i) => `<span class="${i === 0 ? 'sel' : ''}">${esc(t)}</span>`).join('')
     lens.querySelector('.l-cap')!.textContent = f.caption
     lens.querySelector('.l-ftr')!.textContent = f.footer
     const art = lens.querySelector<HTMLElement>('.l-art')!
@@ -99,9 +109,10 @@ export function mountPhone(root: HTMLElement, app: App) {
 
   function renderControls() {
     const visible = app.visibleOptions()
-    $('#optTitle').textContent = app.game.mode === 'class' ? 'Choose your hero' : 'What do you do?'
+    $('#optTitle').textContent = app.menu.open ? 'Main menu' : app.game.mode === 'class' ? 'Choose your hero' : 'What do you do?'
+    $('#menuBtn').textContent = app.menu.open && app.runAlive ? 'Resume' : 'Menu'
     opts.innerHTML = visible
-      .map((o, i) => `<button class="opt" data-id="${esc(o.id)}"><b>${i + 1}</b>${esc(o.label)}</button>`)
+      .map(o => `<button class="opt" data-id="${esc(o.id)}">${esc(o.label)}${o.detail ? `<small>${esc(o.detail)}</small>` : ''}</button>`)
       .join('')
     mic.hidden = !app.voiceReady
     mic.classList.toggle('live', app.voice === 'listening')

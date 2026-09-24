@@ -167,7 +167,7 @@ export function matchIntent(text: string, options: Option[], known: string[] = [
   return { option: best.option, score: best.hit.score, confidence: low ? 'low' : 'high' }
 }
 
-export type Command = 'inventory' | 'sheet' | 'help' | 'repeat' | 'handsfree-on' | 'handsfree-off' | 'back'
+export type Command = 'inventory' | 'sheet' | 'help' | 'repeat' | 'handsfree-on' | 'handsfree-off' | 'back' | 'menu'
 
 const COMMANDS: [RegExp, Command][] = [
   [/^(open |check |show |look at |see )?(my )?(inventory|backpack|bag|gear|equipment)( please)?$|^what (do i have|am i carrying)/, 'inventory'],
@@ -176,7 +176,8 @@ const COMMANDS: [RegExp, Command][] = [
   [/^(repeat( that)?|say (that )?again|what was that|read (that|it) again|come again|pardon)$/, 'repeat'],
   [/^(hands ?free|always listen|keep listening)( on| mode)?$|^(turn on|enable) hands ?free/, 'handsfree-on'],
   [/^(stop listening|hands ?free off|turn off hands ?free|disable hands ?free|tap mode)$/, 'handsfree-off'],
-  [/^(back|go back|close|done|exit|never mind|nevermind)$/, 'back'],
+  [/^(back|go back|close|done|never mind|nevermind)$/, 'back'],
+  [/^((open |go to |back to |show )?(the )?(main )?menu|pause|pause (the )?game|take a break)( please)?$/, 'menu'],
 ]
 
 export function matchCommand(text: string): Command | null {

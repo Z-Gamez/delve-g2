@@ -8,7 +8,7 @@
 // two and the options don't.
 
 import { Game, ROOMS_PER_FLOOR, type Option, type Mode, type Ruling } from './engine/game.ts'
-import { COMBAT_EFFECTS, EVENT_EFFECTS, CONSUMABLES, themeFor, type EffectKind } from './engine/data.ts'
+import { COMBAT_EFFECTS, EVENT_EFFECTS, CONSUMABLES, themeFor, classDef, type EffectKind } from './engine/data.ts'
 import { itemWords, type Item } from './engine/items.ts'
 import { matchIntent, matchCommand, tokens } from './intent.ts'
 import { DungeonMaster } from './dm.ts'
@@ -31,15 +31,17 @@ export interface LogEntry {
 }
 
 const EXPLORE_EFFECTS: EffectKind[] = ['none', 'heal', 'hurt', 'gold', 'lose_gold', 'item', 'bless', 'curse', 'poison']
-const SELECT_MS = 8000
 const FLASH_MS = 3500
 const HANDS_FREE_MISSES = 3
 
+/** The first pill when voice is set up: a tap without swiping means "talk". */
+export const SPEAK: Option = { id: 'speak', label: '● Speak', words: [] }
+
 export const HELP = [
-  'Speak to play. Tap the glasses, then say what you do: "attack the goblin", "cast fireball", "drink a potion", "go left", "buy the ring". Or say an option\'s number.',
+  'Speak to play. Tap Speak, then say what you do: "attack the goblin", "cast fireball", "drink a potion", "go left", "buy the ring".',
   'Say anything else and the Dungeon Master rules on it: "kick the brazier onto the orc", "bribe the guard", "look for a secret door". You roll the dice.',
-  'Say "inventory", "character", "repeat", or "hands free" to keep the mic open between turns.',
-  'No voice? Swipe to highlight an option and tap to pick it. Double-tap goes back. Press and hold for the menu.',
+  'Swipe to move between options and tap to pick one. Double-tap any time for the main menu: pause, start over, or leave.',
+  'Say "menu", "inventory", "character", "repeat", or "hands free" to keep the mic open between turns.',
   'Every third floor ends in a boss. Rest at campfires, pray at shrines, recruit companions, and see how deep you get. Death is permanent; your legend goes in the Hall of Fame.',
 ].join('\n')
 
@@ -61,13 +63,13 @@ export class App {
   /** AI narration for the current turn, when it has arrived. */
   narration: string | null = null
   page: Page | null = null
-  highlight: number | null = null
+  /** The main menu: open at launch, and on double-tap from anywhere (pause). */
+  menu = { open: true, confirm: false }
   flash = ''
   busy = ''
   log: LogEntry[] = []
 
   private turn = 0
-  private selectUntil = 0
   private flashTimer: ReturnType<typeof setTimeout> | null = null
   private exitArmed = 0
   private awaiting = false
@@ -86,7 +88,6 @@ export class App {
     this.dm = new DungeonMaster(() => this.settings)
     this.dm.onChange(() => this.emit())
     this.configureVoice()
-    if (!this.voiceReady) this.highlight = 0
     const r = game.run
     if (r?.lines.length) this.log.push({ kind: 'story', text: r.lines.join(' ') })
   }
@@ -111,7 +112,6 @@ export class App {
     writeJson(KEYS.settings, this.settings)
     if (serverChanged) this.configureVoice()
     void this.dm.check()
-    if (!this.voiceReady && this.highlight === null) this.highlight = 0
     this.emit()
   }
 
@@ -220,7 +220,7 @@ export class App {
   private armHandsFree(turn: number, delay = 900) {
     if (!this.settings.handsFree || !this.voiceReady) return
     setTimeout(() => {
-      if (turn !== this.turn || this.voice !== 'idle' || this.page || this.game.mode === 'dead') return
+      if (turn !== this.turn || this.voice !== 'idle' || this.page || this.menu.open || this.game.mode === 'dead') return
       void this.listen()
     }, delay)
   }
@@ -240,6 +240,12 @@ export class App {
       this.page = null
     }
     if (cmd) return this.command(cmd)
+
+    if (this.menu.open) {
+      const m = matchIntent(said, this.menuOptions())
+      if (m) return this.pick(m.option.id)
+      return this.setFlash(`Didn't catch "${said}". Say "continue" or "new run".`, 4000)
+    }
 
     const g = this.game
     const mode = g.mode
@@ -266,6 +272,7 @@ export class App {
 
   /** Visible options, plus voice-only ones: items by name, selling, and so on. */
   allOptions(): Option[] {
+    if (this.menu.open) return this.menuOptions()
     const g = this.game
     const opts = g.options()
     const mode = g.mode
@@ -300,6 +307,8 @@ export class App {
         return this.setFlash('Hands-free off. Tap to speak.')
       case 'back':
         return this.back()
+      case 'menu':
+        return this.openMenu()
     }
   }
 
@@ -307,7 +316,11 @@ export class App {
   pick(id: string, target?: number) {
     const g = this.game
     this.page = null
-    this.selectUntil = 0
+    if (id === 'speak') {
+      this.misses = 0
+      return void this.listen()
+    }
+    if (id.startsWith('menu:')) return this.onMenuPick(id.slice(5))
     if (id.startsWith('use:')) {
       const res = g.useOutside(id.slice(4))
       if (!res.ok) return this.setFlash(res.reason ?? 'Not now.')
@@ -321,7 +334,6 @@ export class App {
     const before: Mode = g.mode
     if (id === 'items' || id === 'back') {
       g.choose(id)
-      this.highlight = this.voiceReady ? null : 0
       return this.emit()
     }
     const res = g.choose(id, target)
@@ -361,7 +373,6 @@ export class App {
     this.turn++
     const turn = this.turn
     this.narration = null
-    this.highlight = this.voiceReady ? null : 0
     this.save()
     const r = g.run
     if (r?.lines.length) this.note('story', r.lines.join(' '))
@@ -407,60 +418,53 @@ export class App {
 
   // --- gestures (glasses) ------------------------------------------------------------------
 
-  get selecting(): boolean {
-    return this.highlight !== null && (!this.voiceReady || Date.now() < this.selectUntil)
+  /**
+   * The pills on the lens, in order. With voice set up, Speak comes first, so
+   * a tap without swiping still means "talk" -- the list's selection starts
+   * there after every change.
+   */
+  lensItems(): Option[] {
+    const opts = this.visibleOptions()
+    return this.voiceReady ? [SPEAK, ...opts] : opts
   }
 
-  tap() {
+  /** A tap on the pill list: whichever pill the firmware had selected. */
+  tapItem(index: number) {
     if (this.page) return this.closePage()
+    // Mid-sentence, any tap means "that's all": send what was said.
     if (this.voice === 'listening' || this.voice === 'connecting') return this.stopListening()
     if (this.voice === 'thinking' || this.voice === 'transcribing') return
-    if (this.selecting && this.highlight !== null) {
-      const opt = this.visibleOptions()[this.highlight]
-      if (opt) return this.pick(opt.id)
-    }
-    if (this.voiceReady) {
-      this.misses = 0
-      return void this.listen()
-    }
-    const first = this.visibleOptions()[0]
-    if (first) this.pick(first.id)
+    const item = this.lensItems()[index]
+    if (item) this.pick(item.id)
   }
 
+  /** A tap anywhere else (pages, the phone's mic button, tests): talk, or pick the first pill. */
+  tap() {
+    this.tapItem(0)
+  }
+
+  /** Swipes only matter on text pages; the pill list scrolls itself. */
   swipe(delta: number) {
-    if (this.page) return this.pageBy(delta)
-    if (this.voice === 'listening') this.cancelListening()
-    const n = this.visibleOptions().length
-    if (!n) return
-    this.highlight = this.highlight === null || !this.selecting ? (delta > 0 ? 0 : n - 1) : (this.highlight + delta + n) % n
-    this.selectUntil = Date.now() + SELECT_MS
-    this.emit()
-    // Let the highlight fade back to "tap to speak" when the timer runs out.
-    if (this.voiceReady) {
-      setTimeout(() => {
-        if (Date.now() >= this.selectUntil) {
-          this.highlight = null
-          this.emit()
-        }
-      }, SELECT_MS + 50)
-    }
+    if (this.page) this.pageBy(delta)
   }
 
+  /** Double-tap: back out of whatever is open, then to the main menu. */
   double() {
     if (this.voice === 'listening' || this.voice === 'connecting') return this.cancelListening()
     if (this.page) return this.closePage()
-    if (this.selecting && this.voiceReady) {
-      this.highlight = null
-      this.selectUntil = 0
+    if (this.menu.confirm) {
+      this.menu.confirm = false
       return this.emit()
     }
-    if (this.game.run?.combat?.menu === 'items') return this.pick('back')
-    if (Date.now() - this.exitArmed < 2500) {
-      this.save()
-      return this.hooks.exit()
+    if (this.menu.open) {
+      // From the menu, double-tap resumes a run in progress, or leaves.
+      if (this.runAlive) return this.onMenuPick('continue')
+      if (Date.now() - this.exitArmed < 2500) return this.onMenuPick('exit')
+      this.exitArmed = Date.now()
+      return this.setFlash('Double-tap again to leave.', 2500)
     }
-    this.exitArmed = Date.now()
-    this.setFlash('Double-tap again to leave. Your run is saved.', 2500)
+    if (this.game.run?.combat?.menu === 'items') return this.pick('back')
+    this.openMenu()
   }
 
   back() {
@@ -469,7 +473,100 @@ export class App {
   }
 
   visibleOptions(): Option[] {
+    if (this.menu.open) return this.menuOptions()
     return this.game.options().filter(o => !o.hidden)
+  }
+
+  // --- main menu -------------------------------------------------------------------------
+
+  /** A run that can be continued (not one that just ended in death). */
+  get runAlive(): boolean {
+    return !!this.game.run && this.game.mode !== 'dead'
+  }
+
+  openMenu() {
+    if (this.voice === 'listening' || this.voice === 'connecting') this.cancelListening()
+    this.page = null
+    this.menu = { open: true, confirm: false }
+    this.save()
+    this.emit()
+  }
+
+  menuOptions(): Option[] {
+    if (this.menu.confirm) {
+      return [
+        { id: 'menu:restart', label: 'Start over', words: ['start over', 'yes', 'restart', 'confirm', 'do it', 'new run'], detail: 'this hero is lost' },
+        { id: 'menu:cancel', label: 'Cancel', words: ['cancel', 'no', 'never mind', 'keep playing', 'back'] },
+      ]
+    }
+    const opts: Option[] = []
+    if (this.runAlive) {
+      opts.push({ id: 'menu:continue', label: 'Continue', words: ['continue', 'resume', 'play', 'unpause', 'keep playing', 'back to the game', 'go back'], detail: this.runSummary() })
+    }
+    opts.push(
+      { id: 'menu:new', label: 'New run', words: ['new run', 'new game', 'new hero', 'restart', 'start over', 'start', 'play', 'begin'], detail: this.runAlive ? 'abandon this hero' : 'choose a hero' },
+      { id: 'menu:hall', label: 'Hall of Fame', words: ['hall of fame', 'hall', 'legends', 'high scores', 'scores'] },
+      { id: 'menu:help', label: 'How to play', words: ['how to play', 'help', 'instructions', 'tutorial'] },
+      { id: 'menu:hands', label: `Hands-free: ${this.settings.handsFree ? 'on' : 'off'}`, words: ['hands free', 'handsfree', 'toggle hands free'], detail: 'mic reopens every turn' },
+      { id: 'menu:exit', label: 'Exit', words: ['exit', 'quit', 'leave', 'close', 'goodbye'], detail: this.runAlive ? 'your run is saved' : '' },
+    )
+    return opts
+  }
+
+  private runSummary(): string {
+    const r = this.game.run
+    if (!r) return ''
+    return `${r.hero.name}, floor ${r.floor}`
+  }
+
+  private onMenuPick(what: string) {
+    switch (what) {
+      case 'continue':
+        this.menu = { open: false, confirm: false }
+        this.emit()
+        return this.armHandsFree(this.turn, 800)
+      case 'new':
+        if (this.runAlive) {
+          this.menu.confirm = true
+          return this.emit()
+        }
+        return this.startOver()
+      case 'restart':
+        return this.startOver()
+      case 'cancel':
+        this.menu.confirm = false
+        return this.emit()
+      case 'hall':
+        return this.openPage('hall')
+      case 'help':
+        return this.openPage('help')
+      case 'hands':
+        return this.toggleHandsFree()
+      case 'exit':
+        this.save()
+        return this.hooks.exit()
+    }
+  }
+
+  /** Drops the current hero (abandoned runs don't enter the Hall of Fame) and goes to hero select. */
+  private startOver() {
+    this.game.run = null
+    this.dm.forget()
+    this.log = []
+    this.menu = { open: false, confirm: false }
+    this.afterTurn({ narrate: false })
+  }
+
+  /** What the lens shows behind the menu. */
+  menuScene(): { icon: IconName; caption: string; text: string } {
+    const r = this.game.run
+    if (this.menu.confirm && r) {
+      return { icon: 'dead-head', caption: 'Start over?', text: `${r.hero.name}, level ${r.hero.level} ${classDef(r.hero.cls).name} on floor ${r.floor}, will be lost for good.` }
+    }
+    if (this.runAlive && r) {
+      return { icon: classDef(r.hero.cls).icon, caption: r.hero.name, text: `Paused. ${r.hero.name}, level ${r.hero.level} ${classDef(r.hero.cls).name}, is waiting on floor ${r.floor} of ${themeFor(r.floor)}.` }
+    }
+    return { icon: 'dice-twenty-faces-twenty', caption: 'Main menu', text: 'An endless dungeon. Every run ends in death: how deep can you go?' }
   }
 
   // --- pages ---------------------------------------------------------------------------
@@ -510,24 +607,27 @@ export class App {
     if (on) this.armHandsFree(this.turn, 800)
   }
 
+  /** From the phone's Settings: drop the hero and go back to the main menu. */
   abandonRun() {
     this.game.run = null
     this.dm.forget()
     this.log = []
     this.afterTurn({ narrate: false })
+    this.openMenu()
   }
 
   // --- what to show ----------------------------------------------------------------------
 
   headerLeft(): string {
     const r = this.game.run
-    if (!r || this.game.mode === 'name') return '◆ DELVE'
+    if (this.menu.open || !r || this.game.mode === 'name') return '◆ DELVE'
     const theme = themeFor(r.floor).replace(/^the /, '')
     return `◆ F${r.floor} ${Math.min(r.step + 1, ROOMS_PER_FLOOR)}/${ROOMS_PER_FLOOR} · ${theme}`
   }
 
   headerRight(): string {
     const r = this.game.run
+    if (this.menu.open) return 'main menu'
     if (!r || this.game.mode === 'name') return 'endless dungeon'
     const h = r.hero
     return `♥ ${Math.max(0, h.hp)}/${this.game.maxHp()}${h.tempHp ? `+${h.tempHp}` : ''}   ${h.gold}g   L${h.level}`
@@ -543,17 +643,19 @@ export class App {
 
   footer(): string {
     if (this.page) return ''
-    if (this.voice === 'listening') return `● ${this.partial ? `"${this.partial}"` : 'Listening…'}`
+    if (this.voice === 'listening') return `● ${this.partial ? `"${this.partial}"` : 'Listening… tap to send'}`
     if (this.voice === 'connecting') return '◐ Opening the mic…'
     if (this.voice === 'transcribing') return `◐ ${this.partial ? `"${this.partial}"` : 'Hearing you…'}`
     if (this.voice === 'thinking') return `◐ ${this.busy || 'Thinking…'}`
     if (this.flash) return this.flash
-    const opts = this.visibleOptions()
-    if (this.selecting && this.highlight !== null && opts[this.highlight]) {
-      return this.voiceReady ? `tap: ${opts[this.highlight].label}   double-tap: cancel` : `tap: ${opts[this.highlight].label}   swipe: move   hold: menu`
-    }
-    if (this.voiceReady) return this.settings.handsFree ? 'hands-free · tap: speak · swipe: choose' : 'tap: speak   swipe: choose   hold: menu'
-    return 'tap: choose   swipe: move   hold: menu'
+    // The lens shows three pills at a time; say when there are more below.
+    const count = this.lensItems().length
+    const swipe = count > 3 ? `swipe ▼ ${count} options` : 'swipe + tap to choose'
+    if (this.menu.open) return this.runAlive ? `${swipe}   double-tap: resume` : swipe
+    // Under an AI narration, the numbers it left out.
+    const tally = this.story().tally
+    if (tally) return tally
+    return `${swipe}   double-tap: menu`
   }
 }
 
