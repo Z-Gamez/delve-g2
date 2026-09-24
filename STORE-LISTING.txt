@@ -9,9 +9,9 @@ Pick one of six classes: Fighter, Rogue, Wizard, Cleric, Ranger or Barbarian. Ev
 No voice? Swipe through the option pills and tap to pick. Double-tap any time for the main menu to pause or start over. Everything also works from the phone.
 
 SETUP
-1. Voice needs the free Delve server on your Windows PC: github.com/Z-Gamez/delve-g2 (server folder). It turns speech into text with Whisper and can run a local AI Dungeon Master with Ollama. Your phone reaches it over Tailscale or the same Wi-Fi, and your voice never leaves your own PC.
-2. In Delve on your phone, open Settings and enter your PC's Tailscale MagicDNS name (like my-pc.tail1234.ts.net) or delve.local. Port 8790 is added for you.
-3. Choose the Dungeon Master: Local runs free on your PC, or pick Claude, ChatGPT or OpenRouter and paste your own API key. Keys stay on your phone and are sent only to that provider. Each narrated turn is a small charge on your account.
+1. Voice: use cloud speech with your own OpenAI or OpenRouter key (no PC needed), or run the free Delve server on your Windows PC (github.com/Z-Gamez/delve-g2), which transcribes with Whisper so your voice stays on your PC and can also run a local Dungeon Master with Ollama.
+2. In Delve's Settings on your phone, pick your speech provider and paste its key, or enter your PC's Tailscale name (like my-pc.tail1234.ts.net) or delve.local.
+3. Choose the Dungeon Master: Local runs free on your PC, or pick Claude, ChatGPT or OpenRouter and paste your own API key. Keys stay on your phone and go only to that provider; cloud use is a small charge on your account.
 4. Tap Speak and talk. Press and hold for the glasses menu: character sheet, inventory, hands-free mode, how to play and the Hall of Fame.
 
 Icons from game-icons.net, CC BY 3.0.

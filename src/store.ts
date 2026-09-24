@@ -6,6 +6,9 @@
 // plugin and survives. In a plain browser we fall back to localStorage.
 
 import type { Provider } from './llm'
+import type { CloudSpeechProvider } from './cloudStt'
+
+export type SpeechProvider = 'server' | CloudSpeechProvider
 
 export interface HostStorage {
   setLocalStorage(key: string, value: string): Promise<boolean>
@@ -65,17 +68,21 @@ export interface Settings {
   handsFree: boolean
   /** Who plays the Dungeon Master. */
   provider: Provider
+  /** Who turns speech into text: the Delve server's Whisper, or a cloud API (keys shared with the DM). */
+  speech: SpeechProvider
+  /** Chosen speech model per cloud provider; '' = that provider's default. */
+  speechModels: Partial<Record<CloudSpeechProvider, string>>
   /** Cloud API keys, per provider. They live only in the app's private host storage. */
   keys: Partial<Record<Provider, string>>
   /** Chosen model per provider; '' = that provider's default. */
   models: Partial<Record<Provider, string>>
 }
 
-export const DEFAULT_SETTINGS: Settings = { server: '', ai: true, handsFree: false, provider: 'local', keys: {}, models: {} }
+export const DEFAULT_SETTINGS: Settings = { server: '', ai: true, handsFree: false, provider: 'local', keys: {}, models: {}, speech: 'server', speechModels: {} }
 
 /** Fills in fields added since a settings blob was saved. */
 export function migrateSettings(saved: Partial<Settings> & { model?: string }): Settings {
-  const s: Settings = { ...DEFAULT_SETTINGS, ...saved, keys: { ...saved.keys }, models: { ...saved.models } }
+  const s: Settings = { ...DEFAULT_SETTINGS, ...saved, keys: { ...saved.keys }, models: { ...saved.models }, speechModels: { ...saved.speechModels } }
   if (saved.model && !s.models.local) s.models.local = saved.model
   delete (s as { model?: string }).model
   return s

@@ -23,8 +23,8 @@ export const PROVIDERS: { id: Provider; name: string; keyHint: string }[] = [
 ]
 
 const ANTHROPIC = 'https://api.anthropic.com'
-const OPENAI = 'https://api.openai.com'
-const OPENROUTER = 'https://openrouter.ai'
+export const OPENAI = 'https://api.openai.com'
+export const OPENROUTER = 'https://openrouter.ai'
 
 /** Used when the player hasn't picked a model for a provider. */
 export const DEFAULT_MODELS: Record<Provider, string> = {

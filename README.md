@@ -47,6 +47,24 @@ glasses mic ─PCM─▶ Delve server /stt (Whisper, auto-stop on silence) ─te
 The Delve server is standalone. It shares no code or process with any other G2 bridge. It needs Python with
 `faster-whisper`, `aiohttp`, `numpy` and (optionally) `zeroconf`, plus Ollama running locally.
 
+### Cloud speech (no PC needed)
+
+In **Settings → Voice → Speech-to-text**, pick one of these:
+
+| Provider | How | Notes |
+|---|---|---|
+| Delve server | Whisper on your PC, streamed over a WebSocket | Free and private. Shows your words while you speak. |
+| OpenAI | `/v1/audio/transcriptions`, defaulting to `gpt-4o-mini-transcribe` | Primed with the words on screen, so "Fire Bolt" doesn't come back as "fire bowl". |
+| OpenRouter | An audio-capable model (Gemini Flash by default) asked to transcribe | Any of its audio-input models. |
+
+Claude isn't on this list because it has no speech-to-text. Cloud keys are shared with the Dungeon Master, so one
+OpenAI or OpenRouter key covers both, and Delve then runs with no PC at all.
+
+Cloud APIs don't detect end of speech, so `src/endpoint.ts` does it on the phone. The noise floor is a low
+percentile of the last 5 s of levels, and speech must stand 3x clear of it. That way a loud room (the G2 once idled
+at RMS 1000–3000 next to a TV) can't hold the mic open. A tap always sends immediately. `test/speech.test.ts`
+covers quiet rooms, TV-level rooms, coughs and real speech clips mixed with room noise.
+
 ### Choosing the Dungeon Master's brain
 
 In **Settings → Dungeon Master**, pick one of these providers:
@@ -60,7 +78,6 @@ In **Settings → Dungeon Master**, pick one of these providers:
 
 The model list is fetched live from the provider, which also checks your key. Keys stay in Delve's private storage
 on the phone and are sent only to that provider. Every narrated turn is a small paid call on your account.
-Speech-to-text always goes through the Delve server, whichever provider you pick.
 
 `src/llm.ts` makes these calls with plain `fetch` instead of the vendor SDKs. Even Hub's review rejects bundles
 that contain URL literals missing from the manifest whitelist, and the SDKs embed documentation links in their
@@ -107,7 +124,7 @@ mode reopens the mic after every turn.
 
 ```
 npm run dev        # http://localhost:5175 (phone UI + lens mirror; lens uses a stub host)
-npm test           # provider, engine and intent tests, plus a bot that plays 150 runs per class
+npm test           # provider, speech, engine and intent tests, plus a bot that plays 150 runs per class
 npm run pack       # build + delve.ehpk
 npm run icons      # regenerate src/icons.gen.ts from @iconify-json/game-icons
 ```

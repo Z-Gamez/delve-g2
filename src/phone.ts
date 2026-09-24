@@ -11,6 +11,15 @@ import { CONSUMABLES } from './engine/data'
 import { itemName, itemDesc } from './engine/items'
 import { normalizeServerUrl, looksWhitelisted } from './store'
 import { PROVIDERS, listModels, type Provider } from './llm'
+import { listSpeechModels } from './cloudStt'
+import type { SpeechProvider } from './store'
+
+/** Speech-to-text choices. Claude isn't here: it has no speech-to-text. */
+const SPEECH: { id: SpeechProvider; name: string }[] = [
+  { id: 'server', name: 'Delve server (Whisper on your PC)' },
+  { id: 'openai', name: 'OpenAI' },
+  { id: 'openrouter', name: 'OpenRouter' },
+]
 import type { DmStatus } from './dm'
 
 type Tab = 'story' | 'hero' | 'pack' | 'legends' | 'settings'
@@ -124,7 +133,7 @@ export function mountPhone(root: HTMLElement, app: App) {
     dmPill.textContent = pills[dm]
     dmPill.className = `pill ${dm === 'ready' ? 'ok' : dm === 'checking' || dm === 'off' ? '' : 'warn'}`
     const micPill = $('#micPill')
-    micPill.textContent = app.voiceReady ? 'Voice on' : app.hasMic ? 'Voice: set server' : 'No glasses mic'
+    micPill.textContent = app.voiceReady ? 'Voice on' : app.hasMic ? 'Voice: set up' : 'No glasses mic'
     micPill.className = `pill ${app.voiceReady ? 'ok' : 'warn'}`
   }
 
@@ -182,7 +191,23 @@ export function mountPhone(root: HTMLElement, app: App) {
     panel.innerHTML = `
       <h3>Voice</h3>
       <div class="field">
-        <label for="server">Delve server address (speech-to-text runs on your PC)</label>
+        <label for="speech">Speech-to-text</label>
+        <div class="row"><select id="speech">${SPEECH.map(p => `<option value="${p.id}" ${p.id === s.speech ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+      </div>
+      <div class="field" ${s.speech === 'server' ? 'hidden' : ''}>
+        <label for="speechKey">${esc(SPEECH.find(p => p.id === s.speech)?.name ?? '')} API key <small>(shared with the Dungeon Master)</small></label>
+        <div class="row">
+          <input type="password" id="speechKey" placeholder="${s.speech !== 'server' && s.keys[s.speech] ? `saved (…${esc(s.keys[s.speech]!.slice(-4))})` : 'sk-…'}" autocapitalize="off" autocomplete="off" spellcheck="false" />
+          <button class="btn primary" id="saveSpeechKey">Save</button>
+        </div>
+      </div>
+      <div class="field" ${s.speech === 'server' ? 'hidden' : ''}>
+        <label for="speechModel">Speech model</label>
+        <div class="row"><select id="speechModel"><option value="">Default</option></select></div>
+        <p class="hint" id="speechHint"></p>
+      </div>
+      <div class="field">
+        <label for="server">Delve server address (for local speech and the local Dungeon Master)</label>
         <div class="row">
           <input type="text" id="server" placeholder="my-pc.tail1234.ts.net" value="${esc(s.server)}" autocapitalize="off" spellcheck="false" />
           <button class="btn primary" id="saveServer">Save</button>
@@ -233,6 +258,22 @@ export function mountPhone(root: HTMLElement, app: App) {
     })
     q<HTMLInputElement>('#ai').addEventListener('change', e => app.updateSettings({ ai: (e.target as HTMLInputElement).checked }))
     q<HTMLInputElement>('#hands').addEventListener('change', e => app.updateSettings({ handsFree: (e.target as HTMLInputElement).checked }))
+    q<HTMLSelectElement>('#speech').addEventListener('change', e => {
+      app.updateSettings({ speech: (e.target as HTMLSelectElement).value as SpeechProvider })
+      renderSettings()
+    })
+    panel.querySelector('#saveSpeechKey')?.addEventListener('click', () => {
+      const key = q<HTMLInputElement>('#speechKey').value.trim()
+      const sp = app.settings.speech
+      if (!key || sp === 'server') return
+      app.updateSettings({ keys: { ...app.settings.keys, [sp]: key } })
+      renderSettings()
+    })
+    q<HTMLSelectElement>('#speechModel').addEventListener('change', e => {
+      const sp = app.settings.speech
+      if (sp === 'server') return
+      app.updateSettings({ speechModels: { ...app.settings.speechModels, [sp]: (e.target as HTMLSelectElement).value } })
+    })
     q<HTMLSelectElement>('#provider').addEventListener('change', e => {
       app.updateSettings({ provider: (e.target as HTMLSelectElement).value as Provider })
       renderSettings()
@@ -258,6 +299,29 @@ export function mountPhone(root: HTMLElement, app: App) {
     updateSettingsStatus()
     void checkServer()
     void loadModels()
+    void loadSpeechModels()
+  }
+
+  async function loadSpeechModels() {
+    const sel = panel.querySelector<HTMLSelectElement>('#speechModel')
+    const hint = panel.querySelector('#speechHint')
+    const sp = app.settings.speech
+    if (!sel || !hint || sp === 'server') return
+    const key = app.settings.keys[sp]
+    const name = SPEECH.find(p => p.id === sp)?.name ?? sp
+    if (!key) {
+      hint.textContent = `Paste your ${name} key. Your voice is then sent to ${name} to be transcribed: no PC needed.`
+      return
+    }
+    hint.textContent = 'Checking the key…'
+    try {
+      const list = await listSpeechModels({ provider: sp, key })
+      const chosen = app.settings.speechModels[sp] ?? ''
+      sel.innerHTML = `<option value="">Default (${esc(list.default || 'none')})</option>` + list.models.map(m => `<option value="${esc(m)}" ${m === chosen ? 'selected' : ''}>${esc(m)}</option>`).join('')
+      hint.textContent = `Ready. Each thing you say is sent to ${name} and billed to your account (a fraction of a cent).${app.hasMic ? '' : ' Voice needs the glasses: open Delve from the Even app.'}`
+    } catch (err) {
+      hint.textContent = err instanceof Error && /rejected/.test(err.message) ? `${name} rejected that key.` : `Can't reach ${name} right now.`
+    }
   }
 
   async function checkServer() {
@@ -299,7 +363,7 @@ export function mountPhone(root: HTMLElement, app: App) {
     const serverHint = panel.querySelector('#serverHint')
     if (serverHint) {
       const parts: string[] = []
-      if (!s.server) parts.push('Delve plays fine without it: tap or swipe to choose. Run the Delve server on your PC for voice control.')
+      if (!s.server) parts.push(s.speech === 'server' ? 'Run the Delve server on your PC for voice control, or pick cloud speech above. Delve also plays fine by swipe and tap.' : 'Optional: only needed for local speech or the local Dungeon Master.')
       else {
         if (serverState) parts.push(serverState)
         if (!looksWhitelisted(s.server)) parts.push('Use a MagicDNS name (….ts.net) or delve.local: the glasses only allow those.')

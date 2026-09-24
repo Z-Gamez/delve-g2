@@ -15,10 +15,30 @@
   <body style="background:#0e0d0c;color:#eee">
     <div id="app"></div>
     <script>
-      const serverUrl = new URLSearchParams(location.search).get('server') || 'http://127.0.0.1:8790'
+      const params = new URLSearchParams(location.search)
+      const serverUrl = params.get('server') || 'http://127.0.0.1:8790'
+      // ?speech=openai|openrouter: cloud speech against a stubbed API. The
+      // clip's words come back as the transcript (window.__sttText), and each
+      // request is kept in window.__stt for inspection.
+      const speech = params.get('speech') || 'server'
       window.__calls = []
       window.__mic = false
-      const store = { 'delve.settings': JSON.stringify({ server: serverUrl, ai: true, handsFree: false }) }
+      window.__stt = []
+      window.__sttText = ''
+      const store = { 'delve.settings': JSON.stringify({ server: serverUrl, ai: true, handsFree: false, speech, keys: speech === 'server' ? {} : { [speech]: 'sk-test' } }) }
+      if (speech !== 'server') {
+        const realFetch = window.fetch.bind(window)
+        window.fetch = async (url, init) => {
+          const u = String(url)
+          if (u.endsWith('/v1/audio/transcriptions') || (u.endsWith('/api/v1/chat/completions') && String(init?.body).includes('input_audio'))) {
+            window.__stt.push({ url: u, init, at: Date.now() })
+            const text = window.__sttText
+            return new Response(JSON.stringify(u.includes('openai') ? { text } : { choices: [{ message: { content: text } }] }), { status: 200 })
+          }
+          if (u.endsWith('/v1/models') && u.includes('openai')) return new Response(JSON.stringify({ data: [{ id: 'whisper-1' }, { id: 'gpt-4o-mini-transcribe' }] }), { status: 200 })
+          return realFetch(url, init)
+        }
+      }
       window.flutter_inappwebview = {
         callHandler: async (name, payload) => {
           let msg = payload

@@ -12,7 +12,8 @@ import { COMBAT_EFFECTS, EVENT_EFFECTS, CONSUMABLES, themeFor, classDef, type Ef
 import { itemWords, type Item } from './engine/items.ts'
 import { matchIntent, matchCommand, tokens } from './intent.ts'
 import { DungeonMaster } from './dm.ts'
-import { SttClient, type SttState } from './stt.ts'
+import { SttClient, type SttState, type SpeechClient } from './stt.ts'
+import { CloudStt } from './cloudStt.ts'
 import { KEYS, writeJson, type Settings } from './store.ts'
 import type { IconName } from './icons.gen.ts'
 
@@ -55,7 +56,9 @@ export interface AppHooks {
 export class App {
   readonly game: Game
   readonly dm: DungeonMaster
-  private stt: SttClient | null = null
+  private stt: SpeechClient | null = null
+  /** Mic loudness while listening to cloud speech (no partial transcripts there). */
+  level = 0
   settings: Settings
 
   voice: VoiceState = 'off'
@@ -102,17 +105,26 @@ export class App {
     for (const fn of this.listeners) fn()
   }
 
+  /** Voice needs the glasses mic, plus somewhere to send it: the Delve server or a cloud key. */
   get voiceReady(): boolean {
-    return this.hasMic && !!this.settings.server
+    if (!this.hasMic) return false
+    const s = this.settings
+    return s.speech === 'server' ? !!s.server : !!s.keys[s.speech]
   }
 
   updateSettings(patch: Partial<Settings>) {
-    const serverChanged = patch.server !== undefined && patch.server !== this.settings.server
+    const before = this.speechKey()
     this.settings = { ...this.settings, ...patch }
     writeJson(KEYS.settings, this.settings)
-    if (serverChanged) this.configureVoice()
+    if (this.speechKey() !== before) this.configureVoice()
     void this.dm.check()
     this.emit()
+  }
+
+  /** Everything that decides which speech client to build. */
+  private speechKey(): string {
+    const s = this.settings
+    return s.speech === 'server' ? `server|${s.server}` : `${s.speech}|${s.keys[s.speech] ?? ''}|${this.hasMic}`
   }
 
   private configureVoice() {
@@ -121,14 +133,27 @@ export class App {
     this.voice = 'off'
     if (!this.voiceReady) return
     this.voice = 'idle'
-    this.stt = new SttClient(() => this.settings.server, {
-      onState: s => this.onSttState(s),
-      onPartial: t => {
+    const events = {
+      onState: (s: SttState, detail?: string) => this.onSttState(s, detail),
+      onPartial: (t: string) => {
         this.partial = t
         this.emit()
       },
-      onTranscript: t => void this.onTranscript(t),
-    })
+      onTranscript: (t: string) => void this.onTranscript(t),
+      onLevel: (l: number) => {
+        this.level = l
+        this.emit()
+      },
+    }
+    const speech = this.settings.speech
+    this.stt = speech === 'server'
+      ? new SttClient(() => this.settings.server, events)
+      : new CloudStt(
+          () => ({ provider: speech, key: this.settings.keys[speech] ?? '', model: this.settings.speechModels[speech] ?? '' }),
+          // Prime the transcriber with what's on screen: option labels and foes' names.
+          () => [...this.visibleOptions().map(o => o.label), ...(this.game.run?.combat?.enemies.map(e => e.name) ?? [])],
+          events,
+        )
   }
 
   private save() {
@@ -154,7 +179,7 @@ export class App {
 
   // --- voice ---------------------------------------------------------------------------
 
-  private onSttState(s: SttState) {
+  private onSttState(s: SttState, detail?: string) {
     if (s === 'listening') this.voice = 'listening'
     else if (s === 'transcribing') this.voice = 'transcribing'
     else if (s === 'connecting') this.voice = 'connecting'
@@ -162,7 +187,7 @@ export class App {
       this.voice = 'idle'
       this.awaiting = false
       void this.hooks.mic(false)
-      this.setFlash('Speech failed. Is the Delve server running?')
+      this.setFlash(this.settings.speech === 'server' ? 'Speech failed. Is the Delve server running?' : `Speech failed: ${detail ?? 'no answer'}`, 5000)
     } else if (this.voice !== 'thinking') this.voice = 'idle'
     this.emit()
   }
@@ -171,6 +196,7 @@ export class App {
     if (!this.stt || this.stt.listening || this.voice === 'thinking') return
     this.page = null
     this.partial = ''
+    this.level = 0
     this.awaiting = true
     await this.stt.connect()
     if (!this.awaiting) return
@@ -643,7 +669,7 @@ export class App {
 
   footer(): string {
     if (this.page) return ''
-    if (this.voice === 'listening') return `● ${this.partial ? `"${this.partial}"` : 'Listening… tap to send'}`
+    if (this.voice === 'listening') return `● ${this.partial ? `"${this.partial}"` : `Listening ${meter(this.level)} tap to send`}`
     if (this.voice === 'connecting') return '◐ Opening the mic…'
     if (this.voice === 'transcribing') return `◐ ${this.partial ? `"${this.partial}"` : 'Hearing you…'}`
     if (this.voice === 'thinking') return `◐ ${this.busy || 'Thinking…'}`
@@ -657,6 +683,12 @@ export class App {
     if (tally) return tally
     return `${swipe}   double-tap: menu`
   }
+}
+
+/** A tiny level meter from the block glyphs the G2 font has. */
+function meter(level: number): string {
+  const bars = '▁▂▃▄▅▆▇█'
+  return bars[Math.max(0, Math.min(bars.length - 1, Math.round(level * (bars.length - 1))))].repeat(3)
 }
 
 function usePhrases(it: Item): string[] {

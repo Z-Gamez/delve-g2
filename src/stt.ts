@@ -24,7 +24,18 @@ const WS_CONNECT_TIMEOUT_MS = 2500
 const PARTIAL_INTERVAL_MS = 600
 const MAX_LISTEN_MS = 12_000
 
-export class SttClient {
+/** What the app needs from any speech-to-text: the Delve server, or a cloud API. */
+export interface SpeechClient {
+  readonly listening: boolean
+  connect(): Promise<void>
+  start(): void
+  stop(): void
+  cancel(): void
+  sendPcm(chunk: Uint8Array): void
+  close(): void
+}
+
+export class SttClient implements SpeechClient {
   private ws: WebSocket | null = null
   private chunks: Uint8Array[] = []
   private capturing = false
