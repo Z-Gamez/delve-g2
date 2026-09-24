@@ -1704,7 +1704,7 @@ export class Game {
   }
 
   private checkLine(a: Ability, dc: number, res: { ok: boolean; roll: number }): string {
-    return `${ABILITY_NAME[a]} ${res.roll} vs ${dc}: ${res.ok ? 'success' : 'fail'}`
+    return `${ABILITY_NAME[a]} check: ${res.roll} vs ${dc}, ${res.ok ? 'success!' : 'failed.'}`
   }
 
   private openChest() {

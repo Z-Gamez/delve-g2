@@ -66,6 +66,9 @@ export function footerLine(text: string): string {
 
 /** Drops glyphs the G2 font doesn't have (or swaps in the unaccented letter). */
 export function lensSafe(text: string): string {
+  // The lens draws a straight " as a stray tick (and loses the closing one);
+  // its curly quotes render properly.
+  text = text.replace(/(^|[\s([{—-])"/g, '$1“').replace(/"/g, '”')
   let out = ''
   for (const ch of text) {
     const cp = ch.codePointAt(0)!
